@@ -1,0 +1,55 @@
+{
+  "UN_CHARTER_ART_51": {
+    "summary": "Inherent right of individual or collective self-defence if an armed attack occurs.",
+    "common_misuse": "Invoked to justify preemptive strikes. Article 51 does NOT authorise anticipatory self-defence."
+  },
+  "UN_CHARTER_ART_42": {
+    "summary": "Security Council may take military action to maintain or restore international peace.",
+    "common_misuse": "Confused with Article 51. Art 42 is collective SC enforcement action, not individual self-defence."
+  },
+  "UNSC_RES_1373": {
+    "year": 2001,
+    "topic": "Counter-terrorism obligations post-9/11.",
+    "common_misuse": "Cited as general security justification in non-terrorism contexts."
+  },
+  "UNSC_RES_2231": {
+    "year": 2015,
+    "topic": "Endorses JCPOA — Iran nuclear deal.",
+    "common_misuse": "Cited as blanket nuclear non-proliferation mandate. Scope is Iran-specific."
+  },
+  "PARIS_AGREEMENT": {
+    "year": 2015,
+    "signatories": 196,
+    "common_misuse": "NDC targets cited as legally binding. They are nationally determined and not internationally enforceable."
+  },
+  "UDHR_ART_19": {
+    "summary": "Right to freedom of opinion and expression.",
+    "common_misuse": "Cited to block platform content moderation. Art 19 binds states, not private entities."
+  },
+  "ICCPR_ART_6": {
+    "summary": "Inherent right to life. No one arbitrarily deprived of life.",
+    "common_misuse": "Cited to oppose capital punishment universally — ICCPR restricts but does not abolish it."
+  },
+  "UNCLOS_ART_121": {
+    "summary": "Islands generate full maritime entitlements; rocks sustaining no habitation generate only territorial sea.",
+    "common_misuse": "All land features cited as islands with full EEZ rights regardless of habitability."
+  },
+  "UN_CHARTER_ART_2_4": {
+    "summary": "All Members shall refrain from the threat or use of force against the territorial integrity or political independence of any state.",
+    "common_misuse": "Used to argue absolute prohibition; exceptions exist under Chapter VII and Article 51."
+  },
+  "ICESCR_ART_12": {
+    "summary": "Right of everyone to the enjoyment of the highest attainable standard of physical and mental health.",
+    "common_misuse": "Interpreted as requiring identical healthcare outcomes; standard is 'highest attainable' given available resources."
+  },
+  "UNFCCC": {
+    "year": 1992,
+    "topic": "Framework Convention on Climate Change — principle of common but differentiated responsibilities.",
+    "common_misuse": "Developed country obligations cited as applying equally to developing nations."
+  },
+  "NPT": {
+    "year": 1968,
+    "topic": "Treaty on the Non-Proliferation of Nuclear Weapons.",
+    "common_misuse": "Article VI disarmament obligation cited as immediate — it requires good-faith negotiations, not unilateral disarmament."
+  }
+}

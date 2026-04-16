@@ -1,0 +1,12 @@
+.env
+.env.local
+.env.production
+.env.staging
+__pycache__/
+*.pyc
+*.pyo
+.secrets.baseline
+output/
+*.egg-info/
+dist/
+.DS_Store

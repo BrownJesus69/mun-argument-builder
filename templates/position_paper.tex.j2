@@ -1,0 +1,57 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\geometry{margin=2.5cm}
+
+\title{\textbf{Working Paper} \\ \small Resolution: {{ slug | replace('-', ' ') | title }}}
+\date{\today}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\section*{Preambulatory Clauses}
+
+\begin{itemize}[leftmargin=2em]
+  \item \textit{Recalling} all previous resolutions addressing this topic,
+  \item \textit{Affirming} the principles enshrined in the UN Charter,
+  \item \textit{Recognizing} the need for coordinated international action,
+  \item \textit{Deeply concerned} by the consequences of inaction in this domain,
+  \item \textit{Emphasizing} the sovereign rights and obligations of Member States,
+\end{itemize}
+
+\section*{Operative Clauses}
+
+\begin{enumerate}[leftmargin=2em]
+{% for block in blocks %}
+  \item \textbf{{ '{' }}{{ loop.index }}{{ '}' }} {{ block.conclusion | replace('&', '\&') | replace('%', '\%') | replace('#', '\#') }};
+
+  \begin{quote}
+    \small {{ block.explanation | replace('&', '\&') | replace('%', '\%') | replace('#', '\#') }}
+  \end{quote}
+{% endfor %}
+\end{enumerate}
+
+\section*{Supporting Arguments}
+
+{% for block in blocks %}
+\subsection*{Block {{ block.block_id }}: {{ block.statement | replace('&', '\&') | replace('%', '\%') | replace('#', '\#') }}}
+
+\textbf{Explanation:} {{ block.explanation | replace('&', '\&') | replace('%', '\%') | replace('#', '\#') }}
+
+\textbf{Example:}
+{% if block.example.placeholder %}
+\textit{[Placeholder — Search: ``{{ block.example.search_query }}''\,]}
+{% else %}
+{{ block.example.text | replace('&', '\&') | replace('%', '\%') | replace('#', '\#') }}
+{% endif %}
+
+\textbf{Conclusion:} {{ block.conclusion | replace('&', '\&') | replace('%', '\%') | replace('#', '\#') }}
+
+{% endfor %}
+
+\end{document}
