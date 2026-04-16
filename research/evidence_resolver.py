@@ -1,106 +1,67 @@
-"""OpenAlex and Google Fact Check evidence resolver."""
+"""OpenAlex and Google Fact Check evidence resolution."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import requests
 
-import config
-from themes.arctic_steel import THEME
+OPENALEX_BASE = "https://api.openalex.org/works"
+GOOGLE_FACTCHECK_BASE = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
 
 
-@dataclass
-class Evidence:
-    title: str
-    source: str
-    url: str | None
-    year: int | None
-    verified: bool
-
-
-# ---------------------------------------------------------------------------
-# OpenAlex
-# ---------------------------------------------------------------------------
-
-_OPENALEX_BASE = "https://api.openalex.org/works"
-
-
-def resolve_openalex(query: str, max_results: int = 5) -> list[Evidence]:
+def resolve_evidence(search_query: str) -> list[dict]:
+    """Query OpenAlex for academic evidence. Returns top 3 results, or [] on failure."""
     try:
         resp = requests.get(
-            _OPENALEX_BASE,
+            OPENALEX_BASE,
             params={
-                "search": query,
-                "per-page": max_results,
-                "select": "title,doi,publication_year,primary_location",
+                "search": search_query,
+                "per-page": 3,
+                "select": "title,doi,id,cited_by_count,open_access,publication_year",
             },
             timeout=8,
         )
         resp.raise_for_status()
         results = resp.json().get("results", [])
-    except Exception:  # noqa: BLE001
+        out: list[dict] = []
+        for r in results:
+            oa = r.get("open_access") or {}
+            out.append(
+                {
+                    "title": r.get("title", "Untitled"),
+                    "doi": r.get("doi", ""),
+                    "url": oa.get("oa_url") or r.get("id", ""),
+                    "cited_by_count": r.get("cited_by_count", 0),
+                    "open_access": oa.get("is_oa", False),
+                }
+            )
+        return out
+    except Exception:
         return []
 
-    evidence: list[Evidence] = []
-    for r in results:
-        doi = r.get("doi")
-        loc = r.get("primary_location") or {}
-        source = (loc.get("source") or {}).get("display_name", "OpenAlex")
-        evidence.append(
-            Evidence(
-                title=r.get("title", "Untitled"),
-                source=source,
-                url=doi,
-                year=r.get("publication_year"),
-                verified=True,
-            )
-        )
-    return evidence
 
-
-# ---------------------------------------------------------------------------
-# Google Fact Check
-# ---------------------------------------------------------------------------
-
-_FACT_CHECK_BASE = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
-
-
-def resolve_fact_check(query: str, max_results: int = 5) -> list[Evidence]:
-    if not config.GOOGLE_KEY:
+def fact_check(claim: str, api_key: str | None) -> list[dict]:
+    """Query Google Fact Check API. Returns [] if no key or on failure."""
+    if not api_key:
         return []
     try:
         resp = requests.get(
-            _FACT_CHECK_BASE,
-            params={"query": query, "key": config.GOOGLE_KEY, "pageSize": max_results},
+            GOOGLE_FACTCHECK_BASE,
+            params={"query": claim, "key": api_key, "pageSize": 3},
             timeout=8,
         )
         resp.raise_for_status()
         claims = resp.json().get("claims", [])
-    except Exception:  # noqa: BLE001
-        return []
-
-    evidence: list[Evidence] = []
-    for c in claims:
-        review = (c.get("claimReview") or [{}])[0]
-        evidence.append(
-            Evidence(
-                title=c.get("text", "Unknown claim"),
-                source=review.get("publisher", {}).get("name", "Google Fact Check"),
-                url=review.get("url"),
-                year=None,
-                verified=review.get("textualRating", "").lower() in ("true", "mostly true"),
+        out: list[dict] = []
+        for c in claims:
+            review = (c.get("claimReview") or [{}])[0]
+            out.append(
+                {
+                    "text": c.get("text", ""),
+                    "claimant": c.get("claimant", ""),
+                    "rating": review.get("textualRating", ""),
+                    "url": review.get("url", ""),
+                }
             )
-        )
-    return evidence
-
-
-# ---------------------------------------------------------------------------
-# Combined resolver
-# ---------------------------------------------------------------------------
-
-def resolve(query: str, max_results: int = 5) -> list[Evidence]:
-    """Resolve a search query against OpenAlex and Google Fact Check."""
-    oa = resolve_openalex(query, max_results)
-    fc = resolve_fact_check(query, max_results)
-    return (oa + fc)[:max_results]
+        return out
+    except Exception:
+        return []

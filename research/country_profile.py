@@ -6,122 +6,37 @@ import json
 import textwrap
 from pathlib import Path
 
-import requests
+from llm import call_llm_json
+from checker.checker_output import console, divider, field, header
+from themes.arctic_steel import THEME
 from rich.style import Style
 
-import config
-from checker.checker_output import console, divider, field, header, placeholder
-from themes.arctic_steel import THEME
 
+_PROFILE_PROMPT = textwrap.dedent("""\
+    You are a diplomatic research assistant. Given a country and a topic, produce a structured
+    country profile as a JSON object with exactly these keys:
 
-# ---------------------------------------------------------------------------
-# OpenAlex helpers (no key required)
-# ---------------------------------------------------------------------------
+    - "official_stance": str — the country's official position on the topic
+    - "key_interests": list of str — 3-5 national interests driving the position
+    - "historical_voting": str — summary of relevant UN voting history
+    - "likely_alliances": list of str — countries or blocs likely to align with this country
+    - "key_arguments": list of str — 3-5 strongest arguments the country can make
+    - "vulnerabilities": list of str — 2-3 weaknesses opponents might exploit
+    - "suggested_resolution_language": str — one preambulatory or operative clause suggestion
+    - "evidence_placeholders": list of objects, each with "label" (str) and "search" (str)
+      — 3 evidence gaps that need to be filled with real research
 
-_OPENALEX_BASE = "https://api.openalex.org/works"
+    Country: {country}
+    Topic: {topic}
 
-
-def _openalex_search(query: str, max_results: int = 3) -> list[dict]:
-    try:
-        resp = requests.get(
-            _OPENALEX_BASE,
-            params={"search": query, "per-page": max_results, "select": "title,doi,publication_year"},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        return resp.json().get("results", [])
-    except Exception:  # noqa: BLE001
-        return []
-
-
-# ---------------------------------------------------------------------------
-# UNdata REST (no key required)
-# ---------------------------------------------------------------------------
-
-_UNDATA_BASE = "https://data.un.org/ws/rest/data"
-
-
-def _undata_search(country: str, topic: str) -> str:
-    """Return a placeholder; UNdata REST is complex to query ad-hoc."""
-    return f"[PLACEHOLDER] UNdata query: {country} {topic}"
-
-
-# ---------------------------------------------------------------------------
-# Claude-powered country brief
-# ---------------------------------------------------------------------------
-
-_PROFILE_SYSTEM = textwrap.dedent("""\
-    You are a diplomatic research assistant. Given a country and a topic, produce a structured country profile with:
-    1. Official position / stance on the topic (cite UN voting record if known)
-    2. Key national interests driving the position
-    3. Relevant treaties, resolutions, or agreements the country has signed
-    4. 2-3 statistics or data points that support the country's narrative
-    5. Likely alliances and opposition in committee
-    6. Suggested talking points (3 bullet points)
-
-    Format as clean markdown with section headers. Be factual and concise.
+    Be factual, concise, and diplomatically accurate.
 """)
 
 
-def _claude_profile(country: str, topic: str) -> str:
-    prompt = f"{_PROFILE_SYSTEM}\n\nCountry: {country}\nTopic: {topic}"
-    payload = {
-        "model": config.OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-    }
-    try:
-        resp = requests.post(
-            f"{config.OLLAMA_BASE_URL}/api/generate",
-            json=payload,
-            timeout=120,
-        )
-        resp.raise_for_status()
-        return resp.json()["response"]
-    except requests.ConnectionError:
-        console.print(
-            "  Ollama not reachable. Run: ollama serve",
-            style=Style(color=THEME["error"]),
-        )
-    except Exception as exc:  # noqa: BLE001
-        console.print(
-            f"  [PLACEHOLDER] LLM unavailable: {exc}",
-            style=Style(color=THEME["dim"], italic=True),
-        )
-    return (
-        f"## {country} — {topic}\n\n"
-        "_[PLACEHOLDER] Ollama unavailable. Fill in manually._\n\n"
-        "### Position\n_Unknown_\n\n"
-        "### Key Interests\n_Unknown_\n\n"
-        "### Suggested Talking Points\n- Point 1\n- Point 2\n- Point 3\n"
-    )
+def get_profile(country: str, topic: str) -> dict:
+    prompt = _PROFILE_PROMPT.format(country=country, topic=topic)
+    return call_llm_json(prompt)
 
-
-# ---------------------------------------------------------------------------
-# Google Fact Check (optional)
-# ---------------------------------------------------------------------------
-
-_FACT_CHECK_BASE = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
-
-
-def _google_fact_check(query: str) -> list[dict]:
-    if not config.GOOGLE_KEY:
-        return []
-    try:
-        resp = requests.get(
-            _FACT_CHECK_BASE,
-            params={"query": query, "key": config.GOOGLE_KEY, "pageSize": 3},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        return resp.json().get("claims", [])
-    except Exception:  # noqa: BLE001
-        return []
-
-
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 def fetch_profile(country: str, topic: str) -> None:
     slug = f"{country.lower().replace(' ', '-')}-{topic.lower().replace(' ', '-')[:30]}"
@@ -132,28 +47,35 @@ def fetch_profile(country: str, topic: str) -> None:
     field("Topic", topic)
     divider()
 
-    # Claude brief
-    profile_md = _claude_profile(country, topic)
+    profile = get_profile(country, topic)
 
-    # OpenAlex academic evidence
-    oa_results = _openalex_search(f"{country} {topic} policy")
+    # Display
+    console.print(f"  Official Stance", style=Style(color=THEME["key"], bold=True))
+    console.print(f"  {profile.get('official_stance', '')}", style=Style(color=THEME["value"]))
 
-    # Assemble output
-    lines = [profile_md, "\n---\n", "## Academic Evidence (OpenAlex)\n"]
-    if oa_results:
-        for r in oa_results:
-            title = r.get("title", "Untitled")
-            doi = r.get("doi", "")
-            year = r.get("publication_year", "n.d.")
-            lines.append(f"- ({year}) {title}" + (f" — {doi}" if doi else ""))
-    else:
-        lines.append("_[PLACEHOLDER] OpenAlex unavailable or no results._")
+    console.print(f"\n  Key Interests", style=Style(color=THEME["key"], bold=True))
+    for interest in profile.get("key_interests", []):
+        console.print(f"  • {interest}", style=Style(color=THEME["value"]))
 
-    content = "\n".join(lines)
-    profile_path = out / "country_profile.md"
-    profile_path.write_text(content)
+    console.print(f"\n  Key Arguments", style=Style(color=THEME["key"], bold=True))
+    for arg in profile.get("key_arguments", []):
+        console.print(f"  • {arg}", style=Style(color=THEME["value"]))
 
-    console.print(profile_md, style=Style(color=THEME["value"]))
+    console.print(f"\n  Likely Alliances", style=Style(color=THEME["key"], bold=True))
+    for ally in profile.get("likely_alliances", []):
+        console.print(f"  • {ally}", style=Style(color=THEME["value"]))
+
+    console.print(f"\n  Vulnerabilities", style=Style(color=THEME["warn"], bold=True))
+    for v in profile.get("vulnerabilities", []):
+        console.print(f"  ⚠ {v}", style=Style(color=THEME["warn"]))
+
+    # Save
+    profile_path = out / "country_profile.json"
+    profile_path.write_text(json.dumps(profile, indent=2))
+
     divider()
-    console.print(f"  ✓  country_profile.md → output/{slug}/", style=Style(color=THEME["success"], bold=True))
+    console.print(
+        f"  ✓  country_profile.json → output/{slug}/",
+        style=Style(color=THEME["success"], bold=True),
+    )
     console.print()

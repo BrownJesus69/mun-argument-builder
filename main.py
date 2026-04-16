@@ -21,9 +21,9 @@ console = Console()
 @app.callback()
 def _startup() -> None:
     """MUN research · argument generation · fallacy checking · document export"""
-    if not config.check_ollama():
+    if not config.check_groq():
         console.print(
-            "  Ollama is not running. Open a terminal and run: ollama serve",
+            "  Groq API is not reachable. Check your GROQ_API_KEY in .env",
             style=Style(color="#ff7e7e"),
         )
         raise typer.Exit(1)
@@ -96,10 +96,11 @@ def speech(
 @app.command()
 def rebuttal(
     verbatim: str = typer.Option(..., "--verbatim", "-v", help="Statement to rebut"),
+    country: str = typer.Option("India", "--country", "-c", help="Your country"),
 ) -> None:
     """Generate a live structured counter-argument (no file write)."""
-    from builder import generate_rebuttal
-    generate_rebuttal(verbatim=verbatim)
+    from builder import generate_rebuttal_cli
+    generate_rebuttal_cli(verbatim=verbatim, country=country)
 
 
 # ---------------------------------------------------------------------------
