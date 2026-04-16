@@ -8,7 +8,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-import anthropic
+import requests
 from rich.console import Console
 from rich.style import Style
 from rich.text import Text
@@ -49,23 +49,32 @@ def _load_last_slug() -> str | None:
     return None
 
 
-def _anthropic_client() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=config.ANTHROPIC_KEY)
-
-
-def _call_claude(system: str, user: str, model: str = "claude-opus-4-6") -> str:
+def _call_llm(system: str, user: str, json_format: bool = False) -> str:
+    prompt = f"{system}\n\n{user}"
+    payload: dict = {
+        "model": config.OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+    }
+    if json_format:
+        payload["format"] = "json"
     try:
-        client = _anthropic_client()
-        message = client.messages.create(
-            model=model,
-            max_tokens=4096,
-            system=system,
-            messages=[{"role": "user", "content": user}],
+        resp = requests.post(
+            f"{config.OLLAMA_BASE_URL}/api/generate",
+            json=payload,
+            timeout=120,
         )
-        return message.content[0].text
+        resp.raise_for_status()
+        return resp.json()["response"]
+    except requests.ConnectionError:
+        console.print(
+            "  Ollama not reachable. Run: ollama serve",
+            style=Style(color=THEME["error"]),
+        )
+        return ""
     except Exception as exc:  # noqa: BLE001
         console.print(
-            f"  [PLACEHOLDER] Claude unavailable: {exc}",
+            f"  [PLACEHOLDER] LLM unavailable: {exc}",
             style=Style(color=THEME["dim"], italic=True),
         )
         return ""
@@ -166,9 +175,10 @@ def build_arguments(
     console.rule(style=Style(color=THEME["dim"]))
 
     # Generate SEEC blocks
-    raw = _call_claude(
+    raw = _call_llm(
         system=_SEEC_SYSTEM,
         user=_build_seec_prompt(resolution, country, stance, committee),
+        json_format=True,
     )
 
     blocks: list[dict[str, Any]] = _parse_seec_json(raw) if raw else []
@@ -177,7 +187,7 @@ def build_arguments(
         blocks = _placeholder_seec(resolution, country, stance)
 
     # Generate operative clauses
-    operative_raw = _call_claude(
+    operative_raw = _call_llm(
         system=_OPERATIVE_SYSTEM,
         user=f"Country: {country}\nStance: {stance}\nArguments:\n{json.dumps(blocks, indent=2)}",
     )
@@ -245,7 +255,7 @@ def rewrite_speech_block(block: int, duration: int) -> None:
         f"of approximately {target_words} words ({duration} seconds). "
         "Preserve all key arguments. Output the speech text only."
     )
-    result = _call_claude(system=system, user=json.dumps(target, indent=2))
+    result = _call_llm(system=system, user=json.dumps(target, indent=2))
 
     console.print()
     console.print(f"  Speech Block {block} (~{duration}s / ~{target_words} words)", style=Style(color=THEME["header"], bold=True))
@@ -267,7 +277,7 @@ def generate_rebuttal(verbatim: str) -> None:
         4. Conclude with a redirect to your position.
         Be direct and concise — this is a live debate. Plain text, no markdown headers.
     """)
-    result = _call_claude(system=system, user=f'Statement to rebut: "{verbatim}"')
+    result = _call_llm(system=system, user=f'Statement to rebut: "{verbatim}"')
 
     console.print()
     console.print("  Rebuttal", style=Style(color=THEME["header"], bold=True))

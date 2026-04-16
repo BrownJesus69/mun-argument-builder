@@ -6,7 +6,6 @@ import json
 import textwrap
 from pathlib import Path
 
-import anthropic
 import requests
 from rich.style import Style
 
@@ -65,27 +64,37 @@ _PROFILE_SYSTEM = textwrap.dedent("""\
 
 
 def _claude_profile(country: str, topic: str) -> str:
+    prompt = f"{_PROFILE_SYSTEM}\n\nCountry: {country}\nTopic: {topic}"
+    payload = {
+        "model": config.OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+    }
     try:
-        client = anthropic.Anthropic(api_key=config.ANTHROPIC_KEY)
-        message = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=2048,
-            system=_PROFILE_SYSTEM,
-            messages=[{"role": "user", "content": f"Country: {country}\nTopic: {topic}"}],
+        resp = requests.post(
+            f"{config.OLLAMA_BASE_URL}/api/generate",
+            json=payload,
+            timeout=120,
         )
-        return message.content[0].text
+        resp.raise_for_status()
+        return resp.json()["response"]
+    except requests.ConnectionError:
+        console.print(
+            "  Ollama not reachable. Run: ollama serve",
+            style=Style(color=THEME["error"]),
+        )
     except Exception as exc:  # noqa: BLE001
         console.print(
-            f"  [PLACEHOLDER] Claude unavailable: {exc}",
+            f"  [PLACEHOLDER] LLM unavailable: {exc}",
             style=Style(color=THEME["dim"], italic=True),
         )
-        return (
-            f"## {country} — {topic}\n\n"
-            "_[PLACEHOLDER] Claude API unavailable. Fill in manually._\n\n"
-            "### Position\n_Unknown_\n\n"
-            "### Key Interests\n_Unknown_\n\n"
-            "### Suggested Talking Points\n- Point 1\n- Point 2\n- Point 3\n"
-        )
+    return (
+        f"## {country} — {topic}\n\n"
+        "_[PLACEHOLDER] Ollama unavailable. Fill in manually._\n\n"
+        "### Position\n_Unknown_\n\n"
+        "### Key Interests\n_Unknown_\n\n"
+        "### Suggested Talking Points\n- Point 1\n- Point 2\n- Point 3\n"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import typer
 from rich.console import Console
+from rich.style import Style
+
+import config
 
 app = typer.Typer(
     name="mun-builder",
@@ -11,6 +16,17 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+
+
+@app.callback()
+def _startup() -> None:
+    """MUN research · argument generation · fallacy checking · document export"""
+    if not config.check_ollama():
+        console.print(
+            "  Ollama is not running. Open a terminal and run: ollama serve",
+            style=Style(color="#ff7e7e"),
+        )
+        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -36,8 +52,8 @@ def build(
 
 @app.command()
 def check(
-    verbatim: str | None = typer.Option(None, "--verbatim", "-v", help="Inline text to check"),
-    file: str | None = typer.Option(None, "--file", "-f", help="Path to a text file to check"),
+    verbatim: Optional[str] = typer.Option(None, "--verbatim", "-v", help="Inline text to check"),
+    file: Optional[str] = typer.Option(None, "--file", "-f", help="Path to a text file to check"),
     chain: bool = typer.Option(False, "--chain", help="Auto-check last build output"),
 ) -> None:
     """Run fallacy and fact checks on a speech or argument."""

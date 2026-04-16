@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-import anthropic
+import requests
 
 import config
 from checker.checker_output import (
@@ -61,22 +61,34 @@ _CHECKER_SYSTEM = textwrap.dedent("""\
 """)
 
 
-def _call_claude(text: str) -> list[dict]:
+def _call_llm(text: str) -> list[dict]:
+    prompt = f"{_CHECKER_SYSTEM}\n\nText to analyse:\n\n{text}"
+    payload = {
+        "model": config.OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json",
+    }
     try:
-        client = anthropic.Anthropic(api_key=config.ANTHROPIC_KEY)
-        message = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=4096,
-            system=_CHECKER_SYSTEM,
-            messages=[{"role": "user", "content": f"Text to analyse:\n\n{text}"}],
+        resp = requests.post(
+            f"{config.OLLAMA_BASE_URL}/api/generate",
+            json=payload,
+            timeout=120,
         )
-        raw = message.content[0].text.strip()
+        resp.raise_for_status()
+        raw = resp.json()["response"].strip()
         return json.loads(raw)
+    except requests.ConnectionError:
+        console.print(
+            "  Ollama not reachable. Run: ollama serve",
+            style=__import__("rich.style", fromlist=["Style"]).Style(color=THEME["error"]),
+        )
+        return []
     except json.JSONDecodeError:
         return []
     except Exception as exc:  # noqa: BLE001
         console.print(
-            f"  [PLACEHOLDER] Claude unavailable: {exc}",
+            f"  [PLACEHOLDER] LLM unavailable: {exc}",
             style=__import__("rich.style", fromlist=["Style"]).Style(color=THEME["dim"], italic=True),
         )
         return []
@@ -234,8 +246,8 @@ def run_check(
     # Heuristic scan (fast, no API)
     heuristic_errors = _heuristic_scan(text)
 
-    # Claude-powered deep scan
-    raw_errors = _call_claude(text)
+    # LLM-powered deep scan
+    raw_errors = _call_llm(text)
     claude_errors: list[CheckerError] = []
     for item in raw_errors:
         try:
