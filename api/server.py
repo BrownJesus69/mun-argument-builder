@@ -59,6 +59,11 @@ class ResearchRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+@app.get("/")
+def root() -> dict:
+    return {"app": "MUN Argument Builder", "docs": "/docs", "health": "/api/health"}
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok", "model": "llama-3.1-8b-instant", "groq": check_groq()}
