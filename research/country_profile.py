@@ -8,7 +8,7 @@ from pathlib import Path
 
 from llm import call_llm_json
 from checker.checker_output import console, divider, field, header
-from themes.arctic_steel import THEME
+from themes.arctic_steel import COLORS as THEME
 from rich.style import Style
 
 

@@ -19,7 +19,7 @@ from checker.checker_output import (
     severity_summary,
     success,
 )
-from themes.arctic_steel import THEME
+from themes.arctic_steel import COLORS as THEME
 
 
 # ---------------------------------------------------------------------------

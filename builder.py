@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.style import Style
 
 from llm import call_llm, call_llm_json
-from themes.arctic_steel import THEME
+from themes.arctic_steel import COLORS as THEME
 
 console = Console()
 
