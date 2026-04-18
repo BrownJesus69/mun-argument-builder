@@ -10,6 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from builder import generate_argument_pack, generate_rebuttal, slugify, save_output
@@ -23,7 +25,7 @@ app = FastAPI(title="MUN Argument Builder", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -60,8 +62,13 @@ class ResearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.get("/")
-def root() -> dict:
-    return {"app": "MUN Argument Builder", "docs": "/docs", "health": "/api/health"}
+def serve_frontend() -> FileResponse:
+    return FileResponse("mun_webapp.html")
+
+
+@app.get("/health")
+def health_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/api/health")
 
 
 @app.get("/api/health")
