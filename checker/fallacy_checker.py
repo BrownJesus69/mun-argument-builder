@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import textwrap
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -64,6 +64,13 @@ _CHECKER_PROMPT = textwrap.dedent("""\
     2. Legal misapplications (incorrect citation of UN Charter articles, resolutions, treaties)
     3. Factual inaccuracies or unverifiable statistics
 
+    Pay special attention to UN Charter article numbers:
+    - Article 51 covers the inherent right of self-defense — NOT any other subject.
+    - Article 42 covers Security Council enforcement action.
+    - Article 2(4) covers the prohibition on the use of force.
+    Flag any incorrect article citation (wrong number for the claimed subject) as HIGH severity
+    with error_type "Legal Misapplication".
+
     Return a JSON object with exactly these keys:
     - "errors": list of error objects, each with:
         "claim" (str): the exact phrase or sentence containing the error
@@ -74,7 +81,7 @@ _CHECKER_PROMPT = textwrap.dedent("""\
         "search_query" (str): a search query to find verification evidence
     - "summary": object with integer counts for "high", "medium", "low", "info"
 
-    If no errors are found, return {"errors": [], "summary": {"high": 0, "medium": 0, "low": 0, "info": 0}}.
+    If no errors are found, return {{"errors": [], "summary": {{"high": 0, "medium": 0, "low": 0, "info": 0}}}}.
 
     Text to analyse:
 
@@ -141,68 +148,76 @@ _LEGAL_KEYWORDS = {
 }
 
 
-def _enrich_with_legal_db(errors: list[CheckerError], legal_db: dict) -> list[CheckerError]:
-    for err in errors:
-        for keyword, db_key in _LEGAL_KEYWORDS.items():
-            if keyword.lower() in err.claim.lower() and db_key in legal_db:
-                entry = legal_db[db_key]
-                misuse = entry.get("common_misuse", "")
-                if misuse:
-                    err.explanation += f" [Legal DB: {misuse}]"
-                break
-    return errors
-
-
 # ---------------------------------------------------------------------------
 # Public entry point — check_verbatim (API)
 # ---------------------------------------------------------------------------
 
+_EMPTY_RESULT: dict = {
+    "errors": [],
+    "summary": {"high": 0, "medium": 0, "low": 0, "info": 0},
+}
+
+
 def check_verbatim(text: str) -> dict:
     legal_db = load_legal_db()
 
-    # LLM deep scan
-    llm_result = _llm_scan(text)
-    llm_errors_raw: list[dict] = llm_result.get("errors", [])
+    # LLM deep scan — always safe to call; _llm_scan already catches internally
+    try:
+        llm_result = _llm_scan(text)
+    except Exception:
+        llm_result = {}
 
-    llm_errors: list[CheckerError] = []
-    for item in llm_errors_raw:
+    llm_errors: list[dict] = []
+    for item in llm_result.get("errors", []):
         try:
-            llm_errors.append(
-                CheckerError(
-                    claim=item["claim"],
-                    error_type=item["error_type"],
-                    severity=item["severity"],
-                    explanation=item["explanation"],
-                    correction=item["correction"],
-                    evidence=[item.get("search_query", "")] if item.get("search_query") else [],
-                )
-            )
+            llm_errors.append({
+                "claim":        str(item["claim"]),
+                "error_type":   str(item["error_type"]),
+                "severity":     str(item["severity"]).upper(),
+                "explanation":  str(item["explanation"]),
+                "correction":   str(item["correction"]),
+                "search_query": str(item.get("search_query", "")),
+            })
         except (KeyError, TypeError):
             continue
 
-    # Heuristic scan
-    heuristic_errors = _heuristic_scan(text)
+    # Heuristic pre-scan — convert CheckerError → dict
+    heuristic_errors: list[dict] = []
+    for e in _heuristic_scan(text):
+        heuristic_errors.append({
+            "claim":        e.claim,
+            "error_type":   e.error_type,
+            "severity":     e.severity,
+            "explanation":  e.explanation,
+            "correction":   e.correction,
+            "search_query": e.evidence[0] if e.evidence else "",
+        })
 
     # Merge — deduplicate by claim
     seen: set[str] = set()
-    all_errors: list[CheckerError] = []
+    all_errors: list[dict] = []
     for e in llm_errors + heuristic_errors:
-        if e.claim not in seen:
-            seen.add(e.claim)
+        if e["claim"] not in seen:
+            seen.add(e["claim"])
             all_errors.append(e)
 
-    # Enrich with legal DB
-    all_errors = _enrich_with_legal_db(all_errors, legal_db)
+    # Enrich with legal DB (inline — no separate helper needed)
+    for err in all_errors:
+        for keyword, db_key in _LEGAL_KEYWORDS.items():
+            if keyword.lower() in err["claim"].lower() and db_key in legal_db:
+                misuse = legal_db[db_key].get("common_misuse", "")
+                if misuse:
+                    err["explanation"] += f" [Legal DB: {misuse}]"
+                break
 
-    # Build summary
-    counts = {"high": 0, "medium": 0, "low": 0, "info": 0}
+    # Compute summary by counting — never trust LLM counts
+    counts: dict[str, int] = {"high": 0, "medium": 0, "low": 0, "info": 0}
     for e in all_errors:
-        counts[e.severity.lower()] = counts.get(e.severity.lower(), 0) + 1
+        key = e["severity"].lower()
+        if key in counts:
+            counts[key] += 1
 
-    return {
-        "errors": [asdict(e) for e in all_errors],
-        "summary": counts,
-    }
+    return {"errors": all_errors, "summary": counts}
 
 
 # ---------------------------------------------------------------------------
@@ -261,9 +276,9 @@ def run_check(
                 f"  {'':12}→ {e['correction']}",
                 style=Style(color=THEME["key"], italic=True),
             )
-            for ev in e.get("evidence", []):
-                if ev:
-                    placeholder("Evidence", ev)
+            sq = e.get("search_query", "")
+            if sq:
+                placeholder("Evidence", sq)
         severity_summary(summary["high"], summary["medium"], summary["low"])
 
     # Write files
@@ -281,6 +296,6 @@ def run_check(
                 f"**Claim:** {e['claim']}",
                 f"**Explanation:** {e['explanation']}",
                 f"**Correction:** {e['correction']}",
-                f"**Evidence:** {', '.join(e.get('evidence', []))}\n",
+                f"**Search:** {e.get('search_query', '')}\n",
             ]
     (out / "fallacy_report.md").write_text("\n".join(lines))
