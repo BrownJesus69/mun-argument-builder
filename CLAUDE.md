@@ -11,7 +11,7 @@
 | Name | MUN Argument Builder |
 | Type | Local Python CLI |
 | Purpose | MUN research · argument generation · fallacy checking · document export |
-| Stack | Python · Typer · Rich · Anthropic SDK · python-dotenv · Jinja2 · SQLite |
+| Stack | Python · Typer · Rich · Groq API · python-dotenv · Jinja2 |
 | Theme | Arctic Steel |
 | Font | JetBrains Mono or Cascadia Code |
 
