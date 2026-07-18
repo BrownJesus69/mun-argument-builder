@@ -10,3 +10,4 @@ output/
 *.egg-info/
 dist/
 .DS_Store
+.last_slug
